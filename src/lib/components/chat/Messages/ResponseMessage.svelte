@@ -24,6 +24,7 @@
 		user
 	} from '$lib/stores';
 	import { synthesizeOpenAISpeech } from '$lib/apis/audio';
+	import { getSpeechSynthesisVoice } from '$lib/utils/audio';
 	import { imageGenerations } from '$lib/apis/images';
 	import {
 		copyToClipboard as _copyToClipboard,
@@ -36,11 +37,10 @@
 		removeDetails,
 		removeAllDetails
 	} from '$lib/utils';
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 	import equal from 'fast-deep-equal';
 
 	import Name from './Name.svelte';
-	import ProfileImage from './ProfileImage.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -169,7 +169,6 @@
 	export let compactPreview = false;
 	export let editCodeBlock = true;
 	export let topPadding = false;
-	export let onInsertToNote: ((content: string) => void) | null = null;
 
 	let citationsElement: HTMLDivElement;
 
@@ -258,8 +257,9 @@
 				if (voices.length > 0) {
 					clearInterval(getVoicesLoop);
 
-					const voice = voices.find((v) => v.voiceURI === getVoiceId());
+					const voice = getSpeechSynthesisVoice(voices, getVoiceId(), $i18n.language);
 					const speech = new SpeechSynthesisUtterance(content);
+					speech.lang = voice?.lang ?? $i18n.language;
 					speech.rate = $settings.audio?.tts?.playbackRate ?? 1;
 
 					speech.onend = () => {
@@ -659,18 +659,28 @@
 		dir={$settings.chatDirection}
 		style="scroll-margin-top: 3rem;"
 	>
-		<div class={`shrink-0 ltr:mr-2 rtl:ml-2 hidden @lg:flex mt-0.5 `}>
-			<ProfileImage
-				src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
-				className={'size-7 assistant-message-profile-image'}
-			/>
+		<div class={`shrink-0 ltr:mr-3 rtl:ml-3 hidden @lg:flex`}>
+			<div
+				class="isolate size-11 overflow-hidden rounded-full border-2 border-upb-200 bg-gradient-to-b from-upb-50 to-upb-200 shadow-sm dark:border-gray-700 dark:from-gray-800 dark:to-gray-850"
+			>
+				<img
+					src="{WEBUI_BASE_URL}/static/assistant.svg"
+					class="size-full assistant-message-profile-image"
+					alt=""
+					aria-hidden="true"
+					draggable="false"
+				/>
+			</div>
 		</div>
 
 		<div class="flex-auto w-0 pl-1 relative">
 			{#if !compactPreview}
 				<Name>
 					<Tooltip content={model?.name ?? message.model} placement="top-start">
-						<span id="response-message-model-name" class="line-clamp-1 text-black dark:text-white">
+						<span
+							id="response-message-model-name"
+							class="line-clamp-1 font-semibold text-upb-navy dark:text-white"
+						>
 							{model?.name ?? message.model}
 						</span>
 					</Tooltip>
@@ -809,7 +819,10 @@
 
 						<div
 							bind:this={contentContainerElement}
-							class="w-full flex flex-col relative {edit ? 'hidden' : ''}"
+							class="w-full flex flex-col relative {edit ? 'hidden' : ''} {hasResponseContent &&
+							message.error !== true
+								? 'mt-1 rounded-2xl rounded-tl-md border border-gray-100 bg-white px-5 py-3.5 shadow-[0_8px_30px_-16px_rgba(22,6,96,0.18)] dark:border-gray-800 dark:bg-gray-850/40 dark:shadow-none'
+								: ''}"
 							id="response-content-container"
 						>
 							{#if !hasResponseContent && !message.done && !message.error && !hasVisibleStatus}
@@ -1074,22 +1087,6 @@
 										</svg>
 									</button>
 								</Tooltip>
-
-								{#if onInsertToNote && visibleResponseContent}
-									<Tooltip content={$i18n.t('Insert into note')} placement="bottom">
-										<button
-											aria-label={$i18n.t('Insert into note')}
-											class="{isLastMessage || ($settings?.highContrastMode ?? false)
-												? 'visible'
-												: 'invisible group-hover:visible'} rounded-lg px-2 py-1.5 text-xs text-gray-500 transition hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-white"
-											on:click={() => {
-												onInsertToNote?.(visibleResponseContent);
-											}}
-										>
-											{$i18n.t('Insert')}
-										</button>
-									</Tooltip>
-								{/if}
 
 								{#if !readOnly && ($user?.role === 'admin' || ($user?.permissions?.chat?.tts ?? true))}
 									<Tooltip content={$i18n.t('Read Aloud')} placement="bottom">

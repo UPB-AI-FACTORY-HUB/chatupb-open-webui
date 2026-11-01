@@ -58,7 +58,6 @@ export const channels = writable([]);
 export const channelId = writable(null);
 
 export { chats, pinnedChats } from './chatList';
-export const pinnedNotes = writable([]);
 export const tags = writable([]);
 export const folders = writable([]);
 
@@ -71,23 +70,6 @@ export const tools = writable(null);
 export const skills = writable(null);
 export const functions = writable(null);
 
-export type WorkspaceSection = 'models' | 'knowledge' | 'prompts' | 'skills' | 'tools';
-export type WorkspaceAction = {
-	id: string;
-	label: string;
-	href?: string;
-	onClick?: () => void | Promise<void>;
-	visible?: boolean;
-};
-
-export const workspaceCounts: Writable<Record<WorkspaceSection, number | null>> = writable({
-	models: null,
-	knowledge: null,
-	prompts: null,
-	skills: null,
-	tools: null
-});
-export const workspaceActions: Writable<WorkspaceAction[]> = writable([]);
 export const adminUserCount: Writable<number | null> = writable(null);
 export const adminGroupCount: Writable<number | null> = writable(null);
 export const adminLeaderboardCount: Writable<number | null> = writable(null);
@@ -108,7 +90,7 @@ export const chatRequestQueues: Writable<
 	Record<string, { id: string; prompt: string; files: any[] }[]>
 > = writable({});
 
-export const sidebarWidth = writable(245);
+export const sidebarWidth = writable(280);
 
 export type SettingsModalRequest = {
 	tab: string;
@@ -258,7 +240,6 @@ type Settings = {
 	renderMarkdownInAssistantMessages?: boolean;
 	recentEmojis?: string[];
 	pinnedMenuItems?: string[];
-	pinnedNotesOrder?: string[];
 
 	defaultUploadContext?: 'full' | 'focused';
 
@@ -308,6 +289,7 @@ type Config = {
 	name: string;
 	version: string;
 	default_locale: string;
+	maintenance?: { enabled: boolean; message: string };
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];
 	features: {
