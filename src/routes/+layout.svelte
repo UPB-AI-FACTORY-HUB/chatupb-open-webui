@@ -44,7 +44,7 @@
 	import { beforeNavigate } from '$app/navigation';
 	import { updated } from '$app/state';
 
-	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
+	import i18n, { initI18n, changeLanguage } from '$lib/i18n';
 
 	import '../tailwind.css';
 	import '../app.css';
@@ -64,7 +64,6 @@
 
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
 	import {
-		bestMatchingLanguage,
 		cleanText,
 		displayFileHandler,
 		getUserTimezone,
@@ -75,6 +74,7 @@
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import SyncStatsModal from '$lib/components/chat/Settings/SyncStatsModal.svelte';
+	import Maintenance from '$lib/components/common/Maintenance.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { getOutputText } from '$lib/components/chat/Messages/structuredOutput';
 	import { getUserSettings } from '$lib/apis/users';
@@ -540,7 +540,7 @@
 
 			if ($isLastActiveTab) {
 				if ($settings?.notificationEnabled ?? false) {
-					new Notification(`${data.title} / Open WebUI`, {
+					new Notification(`${data.title} / ${$WEBUI_NAME}`, {
 						body: timeStr,
 						icon: `${WEBUI_BASE_URL}/static/favicon.png`
 					});
@@ -675,7 +675,7 @@
 
 					if ($isLastActiveTab) {
 						if ($settings?.notificationEnabled ?? false) {
-							new Notification(`${displayTitle} / Open WebUI`, {
+							new Notification(`${displayTitle} / ${$WEBUI_NAME}`, {
 								body: contentPreview,
 								icon: `${WEBUI_BASE_URL}/static/favicon.png`
 							});
@@ -782,7 +782,7 @@
 
 				if ($isLastActiveTab) {
 					if ($settings?.notificationEnabled ?? false) {
-						new Notification(`${title} / Open WebUI`, {
+						new Notification(`${title} / ${$WEBUI_NAME}`, {
 							body: data?.content,
 							icon: `${WEBUI_API_BASE_URL}/users/${data?.user?.id}/profile/image`
 						});
@@ -1167,13 +1167,7 @@
 
 		initI18n(localStorage?.locale);
 		if (!localStorage.locale) {
-			const languages = await getLanguages();
-			const browserLanguages = navigator.languages
-				? navigator.languages
-				: [navigator.language || navigator.userLanguage];
-			const lang = backendConfig?.default_locale
-				? backendConfig.default_locale
-				: bestMatchingLanguage(languages, browserLanguages, 'en-US');
+			const lang = backendConfig?.default_locale || 'es-ES';
 			changeLanguage(lang);
 			dayjs.locale(lang);
 		}
@@ -1321,7 +1315,9 @@
 {/if}
 
 {#if loaded}
-	{#if $isApp}
+	{#if $config?.maintenance?.enabled}
+		<Maintenance message={$config.maintenance.message} />
+	{:else if $isApp}
 		<div class="flex flex-row h-screen">
 			<AppSidebar />
 

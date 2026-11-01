@@ -59,14 +59,12 @@
 	import { deleteFileById } from '$lib/apis/files';
 	import { getChatById } from '$lib/apis/chats';
 	import { getFolderById } from '$lib/apis/folders';
-	import { getNoteById } from '$lib/apis/notes';
 	import { getSessionUser } from '$lib/apis/auths';
 
 	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
 	import { initiateOAuthRedirect } from '$lib/apis/configs';
 	import { matchKeybinding, Shortcut } from '$lib/shortcuts';
 
-	import { createNoteHandler } from '../notes/utils';
 	import { getSuggestionRenderer } from '../common/RichTextInput/suggestions';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
@@ -97,13 +95,12 @@
 	import TerminalMenu from './MessageInput/TerminalMenu.svelte';
 	import Component from '../icons/Component.svelte';
 	import PlusAlt from '../icons/PlusAlt.svelte';
+	import PaperAirplane from '../icons/PaperAirplane.svelte';
 	import Dropdown from '../common/Dropdown.svelte';
 
 	import CommandSuggestionList from './MessageInput/CommandSuggestionList.svelte';
 	import Knobs from '../icons/Knobs.svelte';
 	import ValvesModal from '../workspace/common/ValvesModal.svelte';
-	import Note from '../icons/Note.svelte';
-	import { goto } from '$app/navigation';
 	import InputModal from '../common/InputModal.svelte';
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
@@ -152,9 +149,15 @@
 	$: upbotModelLocked = hasUpbotAssistantReply(selectedModels, history?.messages);
 
 	// An @-mention bypasses the selector entirely, so the lock has to reject it here too.
-	$: if (upbotModelLocked && atSelectedModel !== undefined && !selectedModels.includes(atSelectedModel.id)) {
+	$: if (
+		upbotModelLocked &&
+		atSelectedModel !== undefined &&
+		!selectedModels.includes(atSelectedModel.id)
+	) {
 		atSelectedModel = undefined;
-		toast.error($i18n.t('This chat is locked to its model. Start a new chat to use a different one.'));
+		toast.error(
+			$i18n.t('This chat is locked to its model. Start a new chat to use a different one.')
+		);
 	}
 
 	export let prompt = '';
@@ -718,44 +721,6 @@
 		});
 	};
 
-	const screenCaptureHandler = async () => {
-		try {
-			// Request screen media
-			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-				video: { cursor: 'never' },
-				audio: false
-			});
-			// Once the user selects a screen, temporarily create a video element
-			const video = document.createElement('video');
-			video.srcObject = mediaStream;
-			// Ensure the video loads without affecting user experience or tab switching
-			await video.play();
-			// Set up the canvas to match the video dimensions
-			const canvas = document.createElement('canvas');
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
-			// Grab a single frame from the video stream using the canvas
-			const context = canvas.getContext('2d');
-			context.drawImage(video, 0, 0, canvas.width, canvas.height);
-			// Stop all video tracks (stop screen sharing) after capturing the image
-			mediaStream.getTracks().forEach((track) => track.stop());
-
-			// bring back focus to this current tab, so that the user can see the screen capture
-			window.focus();
-
-			// Convert the canvas to a Base64 image URL
-			const imageUrl = canvas.toDataURL('image/png');
-			const blob = await (await fetch(imageUrl)).blob();
-			const file = new File([blob], `screen-capture-${Date.now()}.png`, { type: 'image/png' });
-			inputFilesHandler([file]);
-			// Clean memory: Clear video srcObject
-			video.srcObject = null;
-		} catch (error) {
-			// Handle any errors (e.g., user cancels screen sharing)
-			console.error('Error capturing screen:', error);
-		}
-	};
-
 	const uploadFileHandler = async (file, process = true, itemData = {}) => {
 		if ($_user?.role !== 'admin' && !($_user?.permissions?.chat?.file_upload ?? true)) {
 			toast.error($i18n.t('You do not have permission to upload files.'));
@@ -979,31 +944,12 @@
 		});
 	};
 
-	const createNote = async () => {
-		if (inputContent?.md.trim() === '' && inputContent?.html.trim() === '') {
-			toast.error($i18n.t('Cannot create an empty note.'));
-			return;
-		}
-
-		const res = await createNoteHandler(
-			dayjs().format('YYYY-MM-DD'),
-			inputContent?.md,
-			inputContent?.html
-		);
-
-		if (res) {
-			// Clear the input content saved in session storage.
-			sessionStorage.removeItem('chat-input');
-			goto(`/notes/${res.id}`);
-		}
-	};
-
 	const onDragOver = (e: DragEvent) => {
 		e.preventDefault();
 
 		// Check if a file or a sidebar chat/folder item is being dragged.
 		// Use a custom MIME type to distinguish intentional drags from SortableJS reorder drags
-		// (e.g. Notes, Workspace, pinned Models), which also set 'text/plain'.
+		// (e.g. pinned Models), which also set 'text/plain'.
 		if (
 			e.dataTransfer?.types?.includes('Files') ||
 			e.dataTransfer?.types?.includes('application/x-open-webui-drag')
@@ -1025,7 +971,7 @@
 		e.preventDefault();
 		console.log(e);
 
-		// Check if the dropped data is a sidebar chat, folder, note, or model item
+		// Check if the dropped data is a sidebar chat, folder, or model item
 		const textData = e.dataTransfer?.getData('text/plain');
 		if (textData) {
 			try {
@@ -1060,23 +1006,6 @@
 						};
 						if (!files.find((f) => f.id === folderItem.id)) {
 							files = [...files, folderItem];
-						}
-					}
-					dragged = false;
-					e.stopPropagation();
-					return;
-				} else if (data.type === 'note' && data.id) {
-					// Fetch the note to get its title, then add as a reference note
-					const note = await getNoteById(localStorage.token, data.id);
-					if (note) {
-						const noteItem = {
-							type: 'note',
-							id: note.id,
-							name: note.title,
-							status: 'processed'
-						};
-						if (!files.find((f) => f.id === noteItem.id)) {
-							files = [...files, noteItem];
 						}
 					}
 					dragged = false;
@@ -1594,9 +1523,9 @@
 
 						<div
 							id="message-input-container"
-							class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border {$temporaryChatEnabled
-								? 'border-dashed border-gray-100 dark:border-gray-800 hover:border-gray-200 focus-within:border-gray-200 hover:dark:border-gray-700 focus-within:dark:border-gray-700'
-								: ' border-gray-100/30 dark:border-gray-850/30 hover:border-gray-200 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800'}  transition px-0.5 bg-white/5 dark:bg-gray-500/5 backdrop-blur-sm dark:text-gray-100"
+							class="flex-1 flex flex-col relative w-full shadow-[0_10px_40px_-14px_rgba(20,36,107,0.18)] dark:shadow-lg rounded-[1.75rem] border {$temporaryChatEnabled
+								? 'border-dashed border-gray-200 dark:border-gray-800 hover:border-gray-300 focus-within:border-gray-300 hover:dark:border-gray-700 focus-within:dark:border-gray-700'
+								: ' border-gray-100 dark:border-gray-850/50 hover:border-upb-100 focus-within:border-upb-200 hover:dark:border-gray-800 focus-within:dark:border-gray-800'}  transition px-1 pt-1 bg-white/90 dark:bg-gray-850/40 backdrop-blur-sm dark:text-gray-100"
 							dir={$settings?.chatDirection ?? 'auto'}
 						>
 							{#if atSelectedModel !== undefined}
@@ -1773,7 +1702,9 @@
 															navigator.maxTouchPoints > 0 ||
 															navigator.msMaxTouchPoints > 0
 														)}
-													placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
+													placeholder={placeholder
+														? placeholder
+														: $i18n.t('Ask another question or request more details…')}
 													largeTextAsFile={($settings?.largeTextAsFile ?? false) && !shiftKey}
 													autocomplete={$config?.features?.enable_autocomplete_generation &&
 														($settings?.promptAutocomplete ?? false)}
@@ -1917,14 +1848,12 @@
 								</div>
 							</div>
 
-							<div class=" flex justify-between mt-0.5 mb-2 mx-0.5 max-w-full" dir="ltr">
+							<div class=" flex justify-between mt-1 mb-2.5 mx-1 max-w-full" dir="ltr">
 								<div class="ml-1 self-end flex items-center flex-1 min-w-0">
 									<InputMenu
 										bind:files
 										selectedModels={selectedModelIds}
 										{fileUploadCapableModels}
-										{screenCaptureHandler}
-										{inputFilesHandler}
 										uploadFilesHandler={() => {
 											filesInputElement.click();
 										}}
@@ -1963,7 +1892,6 @@
 												console.error('OneDrive Error:', error);
 											}
 										}}
-										{onUpload}
 										onClose={async () => {
 											await tick();
 
@@ -1974,7 +1902,7 @@
 										<button
 											type="button"
 											id="input-menu-button"
-											class="bg-transparent hover:bg-gray-100 text-gray-700 dark:text-white dark:hover:bg-gray-800 rounded-full size-[1.875rem] flex justify-center items-center outline-hidden focus:outline-hidden shrink-0"
+											class="bg-gray-100/80 hover:bg-gray-200/70 text-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 rounded-full size-9 flex justify-center items-center outline-hidden focus:outline-hidden shrink-0 transition"
 											aria-label={$i18n.t('More')}
 										>
 											<PlusAlt className="size-5" />
@@ -2245,7 +2173,7 @@
 									</div>
 								</div>
 
-								<div class="self-end flex space-x-1 mr-1 shrink-0 gap-[0.5px]">
+								<div class="self-end flex items-center space-x-1 mr-0.5 shrink-0 gap-[0.5px]">
 									<Tooltip
 										content={upbotModelLocked
 											? $i18n.t(
@@ -2261,7 +2189,7 @@
 												showSetDefault={!history?.currentId}
 												placement="auto"
 												align="end"
-												triggerClassName="items-center gap-1.5 rounded-lg pl-2 pr-1.5 py-1 text-[13px] font-normal text-gray-600 transition-colors duration-100 hover:bg-gray-50/40 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-gray-800/40 dark:hover:text-gray-200"
+												triggerClassName="items-center gap-1.5 rounded-full border border-gray-200 pl-3.5 pr-2.5 py-1.5 text-[13px] font-normal text-gray-700 transition-colors duration-100 hover:border-upb-200 hover:bg-upb-50 hover:text-upb-navy dark:border-gray-800 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/40 dark:hover:text-gray-200"
 											/>
 										</div>
 									</Tooltip>
@@ -2314,7 +2242,7 @@
 												<Tooltip content={$i18n.t('Dictate')}>
 													<button
 														id="voice-input-button"
-														class=" text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 transition rounded-full p-1.5 self-center mr-0.5"
+														class=" text-gray-600 dark:text-gray-300 hover:text-upb-navy dark:hover:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-800 transition rounded-full p-2 self-center mr-0.5"
 														type="button"
 														on:click={async () => {
 															try {
@@ -2355,7 +2283,7 @@
 												<!-- {$i18n.t('Call')} -->
 												<Tooltip content={$i18n.t('Voice mode')}>
 													<button
-														class=" bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full p-[5px] self-center"
+														class=" bg-upb-blue text-white hover:bg-upb-navy shadow-md shadow-upb-blue/25 transition rounded-full size-10 flex items-center justify-center self-center"
 														type="button"
 														on:click={async () => {
 															if (selectedModels.length > 1) {
@@ -2423,26 +2351,18 @@
 													<button
 														id="send-message-button"
 														class="{!(prompt === '' && files.length === 0) || uploadPending
-															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
-															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-[5px] self-center"
+															? 'bg-upb-blue text-white hover:bg-upb-navy shadow-md shadow-upb-blue/25'
+															: 'text-white bg-upb-blue/40 dark:bg-upb-blue/30 disabled'} transition rounded-full size-10 flex items-center justify-center self-center"
 														type="submit"
 														disabled={(prompt === '' && files.length === 0) || uploadPending}
 													>
 														{#if uploadPending}
 															<Spinner className="size-5" />
 														{:else}
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																viewBox="0 0 16 16"
-																fill="currentColor"
-																class="size-5"
-															>
-																<path
-																	fill-rule="evenodd"
-																	d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
-																	clip-rule="evenodd"
-																/>
-															</svg>
+															<PaperAirplane
+																className="size-5 -rotate-45 translate-x-px -translate-y-px"
+																strokeWidth="2"
+															/>
 														{/if}
 													</button>
 												</Tooltip>

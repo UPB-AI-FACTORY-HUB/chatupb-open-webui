@@ -45,6 +45,8 @@ from open_webui.config import (
     CACHE_DIR,
     CORS_ALLOW_ORIGIN,
     DEFAULT_LOCALE,
+    MAINTENANCE_MESSAGE,
+    MAINTENANCE_MODE,
     ENABLE_ADMIN_ANALYTICS,
     # Admin
     ENABLE_ADMIN_CHAT_ACCESS,
@@ -155,7 +157,6 @@ from open_webui.routers import (
     memories,
     models,
     notifications,
-    notes,
     ollama,
     openai,
     pipelines,
@@ -803,7 +804,6 @@ app.include_router(users.router, prefix='/api/v1/users', tags=['users'])
 
 app.include_router(channels.router, prefix='/api/v1/channels', tags=['channels'])
 app.include_router(chats.router, prefix='/api/v1/chats', tags=['chats'])
-app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
@@ -1084,6 +1084,12 @@ async def chat_completion(
         else:
             model = model_item
             await _set_direct_model(request, model, user)
+
+        # upbot refuses title/tags/follow-up generation (every call is a full
+        # agent turn), so don't ask. With title generation off, the chat title
+        # falls back to the first message (see background_tasks_handler).
+        if model.get('owned_by') == 'upbot' and tasks:
+            tasks = {task: False for task in tasks}
 
         # Model params: global defaults as base, per-model overrides win
         default_model_params = await Config.get('models.default_params', {}) or {}
@@ -2113,7 +2119,6 @@ async def get_app_config(request: Request):
         'channels.enable',
         'calendar.enable',
         'automations.enable',
-        'notes.enable',
         'chat.context_compaction.enable',
         'web.search.enable',
         'web.search.confirmation.enable',
@@ -2154,6 +2159,7 @@ async def get_app_config(request: Request):
         'name': app.state.WEBUI_NAME,
         'version': VERSION,
         'default_locale': str(DEFAULT_LOCALE),
+        'maintenance': {'enabled': MAINTENANCE_MODE, 'message': MAINTENANCE_MESSAGE},
         'oauth': {
             # Hide providers (and thus the login buttons / auto-redirect) when OAuth
             # is disabled, without clearing the admin's provider configuration.
@@ -2189,7 +2195,6 @@ async def get_app_config(request: Request):
                     'enable_channels': config.get('channels.enable'),
                     'enable_calendar': config.get('calendar.enable'),
                     'enable_automations': config.get('automations.enable'),
-                    'enable_notes': config.get('notes.enable'),
                     'enable_context_compaction': config.get('chat.context_compaction.enable'),
                     'enable_web_search': config.get('web.search.enable'),
                     'enable_web_search_confirmation': config.get('web.search.confirmation.enable'),
